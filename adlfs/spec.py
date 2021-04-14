@@ -1373,17 +1373,19 @@ class AzureBlobFileSystem(AsyncFileSystem):
                     )
                     out |= rec
 
+                exists_dir = await self._exists(p)
+                exists_file = await self._exists(p.rstrip("/"))
                 if p not in out and (
                     recursive is False
-                    or await self._exists(p)
-                    or await self._exists(p.rstrip("/"))
+                    or exists_dir
+                    or exists_file
                 ):
-                    if not await self._exists(p):
-                        # This is to verify that we don't miss files
-                        p = p.rstrip("/")
-                        if not await self._exists(p):
-                            continue
-                    out.add(p)
+                    if exists_file:
+                        out.add(p.rstrip("/"))
+                    elif exists_dir:
+                        out.add(p)
+                    else:
+                        continue
 
         if not out:
             raise FileNotFoundError
