@@ -1,4 +1,30 @@
 **Change Log**
+2021.07.0
+---------
+- Align version system to match dask and fsspec project conventions
+- Add support for authentication with DefaultAzureCredential object
+- Add keyword anon for explicit access of public Azure containers
+
+v0.7.7
+------
+- Fixed bug in fetch_range that caused attempted reads beyond end of file
+- Added check to mkdir when creating a container to confirm container_name conforms
+  to Azure requirements
+
+v0.7.6
+------
+
+- Compatability with fsspec 2021.6.0
+- `exists()` calls now also checks whether a directory with that name exists or not. Previously this was only checked from the cache
+- Fixed bug in `find` not returning exact matches
+- Added `AzureDatalakeFileSystem.rm_file` and `AzureDatalakeFileSystem.rmdir`
+- Fixed bug in `filter_blobs` when target path contained a special character
+
+v0.7.4
+------
+- Added the location_mode parameter to AzureBlobFileSystem object, and set default to "primary" to enable Access Control Lists and RA-GRS access.  Valid values are "primary" and "secondary"
+
+
 v0.7.2
 -----
 - Now can create / destroy containers with `mkdir()`/`rmdir()` without needing to

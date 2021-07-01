@@ -1,3 +1,5 @@
+import os
+import tempfile
 import datetime
 import dask.dataframe as dd
 from fsspec.implementations.local import LocalFileSystem
@@ -88,6 +90,7 @@ def test_ls(storage):
         "data/root/b",
         "data/root/c",
         "data/root/d",
+        "data/root/e+f",
         "data/root/rfile.txt",
     ]
     assert fs.ls("data/root/") == [
@@ -96,6 +99,7 @@ def test_ls(storage):
         "data/root/b",
         "data/root/c",
         "data/root/d",
+        "data/root/e+f",
         "data/root/rfile.txt",
     ]
 
@@ -108,6 +112,14 @@ def test_ls(storage):
     assert fs.ls("data/root/b/") == ["data/root/b/file.txt"]
     assert fs.ls("data/root/a1") == ["data/root/a1/file1.txt"]
     assert fs.ls("data/root/a1/") == ["data/root/a1/file1.txt"]
+    assert fs.ls("data/root/e+f") == [
+        "data/root/e+f/file1.txt",
+        "data/root/e+f/file2.txt",
+    ]
+    assert fs.ls("data/root/e+f/") == [
+        "data/root/e+f/file1.txt",
+        "data/root/e+f/file2.txt",
+    ]
 
     ## file details
     files = fs.ls("data/root/a/file.txt", detail=True)
@@ -242,6 +254,16 @@ def test_ls(storage):
         fs.ls("data/root/not-a-file.txt")
 
 
+def test_ls_no_listings_cache(storage):
+    fs = AzureBlobFileSystem(
+        account_name=storage.account_name,
+        connection_string=CONN_STR,
+        use_listings_cache=False,
+    )
+    result = fs.ls("data/root")
+    assert len(result) > 0  # some state leaking between tests
+
+
 def test_info(storage):
     fs = AzureBlobFileSystem(
         account_name=storage.account_name, connection_string=CONN_STR
@@ -356,6 +378,8 @@ def test_find(storage):
         "data/root/c/file1.txt",
         "data/root/c/file2.txt",
         "data/root/d/file_with_metadata.txt",
+        "data/root/e+f/file1.txt",
+        "data/root/e+f/file2.txt",
         "data/root/rfile.txt",
     ]
     assert fs.find("data/root", withdirs=False) == [
@@ -365,6 +389,8 @@ def test_find(storage):
         "data/root/c/file1.txt",
         "data/root/c/file2.txt",
         "data/root/d/file_with_metadata.txt",
+        "data/root/e+f/file1.txt",
+        "data/root/e+f/file2.txt",
         "data/root/rfile.txt",
     ]
 
@@ -381,6 +407,9 @@ def test_find(storage):
         "data/root/c/file2.txt",
         "data/root/d/",
         "data/root/d/file_with_metadata.txt",
+        "data/root/e+f/",
+        "data/root/e+f/file1.txt",
+        "data/root/e+f/file2.txt",
         "data/root/rfile.txt",
     ]
     assert fs.find("data/root/", withdirs=True) == [
@@ -395,6 +424,9 @@ def test_find(storage):
         "data/root/c/file2.txt",
         "data/root/d/",
         "data/root/d/file_with_metadata.txt",
+        "data/root/e+f/",
+        "data/root/e+f/file1.txt",
+        "data/root/e+f/file2.txt",
         "data/root/rfile.txt",
     ]
 
@@ -470,6 +502,7 @@ def test_glob(storage):
         "data/root/b",
         "data/root/c",
         "data/root/d",
+        "data/root/e+f",
         "data/root/rfile.txt",
     ]
     assert fs.glob("data/root/*") == [
@@ -478,6 +511,7 @@ def test_glob(storage):
         "data/root/b",
         "data/root/c",
         "data/root/d",
+        "data/root/e+f",
         "data/root/rfile.txt",
     ]
 
@@ -495,6 +529,8 @@ def test_glob(storage):
         "data/root/a1/file1.txt",
         "data/root/c/file1.txt",
         "data/root/c/file2.txt",
+        "data/root/e+f/file1.txt",
+        "data/root/e+f/file2.txt",
     ]
 
     ## text files
@@ -505,6 +541,8 @@ def test_glob(storage):
         "data/root/c/file1.txt",
         "data/root/c/file2.txt",
         "data/root/d/file_with_metadata.txt",
+        "data/root/e+f/file1.txt",
+        "data/root/e+f/file2.txt",
     ]
 
     ## all text files
@@ -515,6 +553,8 @@ def test_glob(storage):
         "data/root/c/file1.txt",
         "data/root/c/file2.txt",
         "data/root/d/file_with_metadata.txt",
+        "data/root/e+f/file1.txt",
+        "data/root/e+f/file2.txt",
         "data/root/rfile.txt",
     ]
 
@@ -531,6 +571,9 @@ def test_glob(storage):
         "data/root/c/file2.txt",
         "data/root/d",
         "data/root/d/file_with_metadata.txt",
+        "data/root/e+f",
+        "data/root/e+f/file1.txt",
+        "data/root/e+f/file2.txt",
         "data/root/rfile.txt",
     ]
     assert fs.glob("data/roo**") == [
@@ -546,6 +589,9 @@ def test_glob(storage):
         "data/root/c/file2.txt",
         "data/root/d",
         "data/root/d/file_with_metadata.txt",
+        "data/root/e+f",
+        "data/root/e+f/file1.txt",
+        "data/root/e+f/file2.txt",
         "data/root/rfile.txt",
     ]
 
@@ -647,11 +693,19 @@ def test_mkdir(storage):
         fs.mkdir("new-container/dir", create_parents=False)
 
 
+@pytest.mark.skip
+def test_mkdir_bad_format(storage):
+    fs = AzureBlobFileSystem(
+        account_name=storage.account_name, connection_string=CONN_STR,
+    )
+    with pytest.raises(ValueError):
+        fs.mkdir("bad_container_name")
+
+
 def test_makedir(storage):
     fs = AzureBlobFileSystem(
         account_name=storage.account_name, connection_string=CONN_STR,
     )
-
     # Verify makedir will create a new container when create_parents is True
     with pytest.raises(FileExistsError):
         fs.makedir("data", exist_ok=False)
@@ -745,28 +799,28 @@ def test_mkdir_rm_recursive(storage):
         account_name=storage.account_name, connection_string=CONN_STR
     )
 
-    fs.mkdir("test_mkdir_rm_recursive")
-    assert "test_mkdir_rm_recursive" in fs.ls("")
+    fs.mkdir("test-mkdir-rm-recursive")
+    assert "test-mkdir-rm-recursive" in fs.ls("")
 
-    with fs.open("test_mkdir_rm_recursive/file.txt", "wb") as f:
+    with fs.open("test-mkdir-rm-recursive/file.txt", "wb") as f:
         f.write(b"0123456789")
 
-    with fs.open("test_mkdir_rm_recursive/dir/file.txt", "wb") as f:
+    with fs.open("test-mkdir-rm-recursive/dir/file.txt", "wb") as f:
         f.write(b"ABCD")
 
-    with fs.open("test_mkdir_rm_recursive/dir/file2.txt", "wb") as f:
+    with fs.open("test-mkdir-rm-recursive/dir/file2.txt", "wb") as f:
         f.write(b"abcdef")
 
-    assert fs.find("test_mkdir_rm_recursive") == [
-        "test_mkdir_rm_recursive/dir/file.txt",
-        "test_mkdir_rm_recursive/dir/file2.txt",
-        "test_mkdir_rm_recursive/file.txt",
+    assert fs.find("test-mkdir-rm-recursive") == [
+        "test-mkdir-rm-recursive/dir/file.txt",
+        "test-mkdir-rm-recursive/dir/file2.txt",
+        "test-mkdir-rm-recursive/file.txt",
     ]
 
-    fs.rm("test_mkdir_rm_recursive", recursive=True)
+    fs.rm("test-mkdir-rm-recursive", recursive=True)
 
-    assert "test_mkdir_rm_recursive" not in fs.ls("")
-    assert fs.find("test_mkdir_rm_recursive") == []
+    assert "test-mkdir-rm-recursive" not in fs.ls("")
+    assert fs.find("test-mkdir-rm-recursive") == []
 
 
 def test_deep_paths(storage):
@@ -774,29 +828,28 @@ def test_deep_paths(storage):
         account_name=storage.account_name, connection_string=CONN_STR
     )
 
-    fs.mkdir("test_deep")
-    assert "test_deep" in fs.ls("")
+    fs.mkdir("test-deep")
+    assert "test-deep" in fs.ls("")
 
-    with fs.open("test_deep/a/b/c/file.txt", "wb") as f:
+    with fs.open("test-deep/a/b/c/file.txt", "wb") as f:
         f.write(b"0123456789")
 
-    assert fs.ls("test_deep") == ["test_deep/a"]
-    assert fs.ls("test_deep/") == ["test_deep/a"]
-    assert fs.ls("test_deep/a") == ["test_deep/a/b"]
-    assert fs.ls("test_deep/a/") == ["test_deep/a/b"]
-    assert fs.find("test_deep") == ["test_deep/a/b/c/file.txt"]
-    assert fs.find("test_deep/") == ["test_deep/a/b/c/file.txt"]
-    assert fs.find("test_deep/a") == ["test_deep/a/b/c/file.txt"]
-    assert fs.find("test_deep/a/") == ["test_deep/a/b/c/file.txt"]
+    assert fs.ls("test-deep") == ["test-deep/a"]
+    assert fs.ls("test-deep/") == ["test-deep/a"]
+    assert fs.ls("test-deep/a") == ["test-deep/a/b"]
+    assert fs.ls("test-deep/a/") == ["test-deep/a/b"]
+    assert fs.find("test-deep") == ["test-deep/a/b/c/file.txt"]
+    assert fs.find("test-deep/") == ["test-deep/a/b/c/file.txt"]
+    assert fs.find("test-deep/a") == ["test-deep/a/b/c/file.txt"]
+    assert fs.find("test-deep/a/") == ["test-deep/a/b/c/file.txt"]
 
-    fs.rm("test_deep", recursive=True)
+    fs.rm("test-deep", recursive=True)
 
-    assert "test_deep" not in fs.ls("")
-    assert fs.find("test_deep") == []
+    assert "test-deep" not in fs.ls("")
+    assert fs.find("test-deep") == []
 
 
 def test_large_blob(storage):
-    import tempfile
     import hashlib
     import io
     import shutil
@@ -1014,34 +1067,34 @@ def test_metadata_write(storage):
     fs = AzureBlobFileSystem(
         account_name=storage.account_name, connection_string=CONN_STR
     )
-    fs.mkdir("test_metadata_write")
+    fs.mkdir("test-metadata-write")
     data = b"0123456789"
     metadata = {"meta": "data"}
 
     # standard blob type
-    with fs.open("test_metadata_write/file.txt", "wb", metadata=metadata) as f:
+    with fs.open("test-metadata-write/file.txt", "wb", metadata=metadata) as f:
         f.write(data)
-    info = fs.info("test_metadata_write/file.txt")
+    info = fs.info("test-metadata-write/file.txt")
     assert info["metadata"] == metadata
     metadata_changed_on_write = {"meta": "datum"}
     with fs.open(
-        "test_metadata_write/file.txt", "wb", metadata=metadata_changed_on_write
+        "test-metadata-write/file.txt", "wb", metadata=metadata_changed_on_write
     ) as f:
         f.write(data)
-    info = fs.info("test_metadata_write/file.txt")
+    info = fs.info("test-metadata-write/file.txt")
     assert info["metadata"] == metadata_changed_on_write
 
     # append blob type
     new_metadata = {"data": "meta"}
-    with fs.open("test_metadata_write/append-file.txt", "ab", metadata=metadata) as f:
+    with fs.open("test-metadata-write/append-file.txt", "ab", metadata=metadata) as f:
         f.write(data)
 
     # try change metadata on block appending
     with fs.open(
-        "test_metadata_write/append-file.txt", "ab", metadata=new_metadata
+        "test-metadata-write/append-file.txt", "ab", metadata=new_metadata
     ) as f:
         f.write(data)
-    info = fs.info("test_metadata_write/append-file.txt")
+    info = fs.info("test-metadata-write/append-file.txt")
 
     # azure blob client doesn't seem to support metadata mutation when appending blocks
     # lets be sure this behavior doesn't change as this would imply
@@ -1049,22 +1102,22 @@ def test_metadata_write(storage):
     assert info["metadata"] == metadata
 
     # getxattr / setxattr
-    assert fs.getxattr("test_metadata_write/file.txt", "meta") == "datum"
-    fs.setxattrs("test_metadata_write/file.txt", metadata="data2")
-    assert fs.getxattr("test_metadata_write/file.txt", "metadata") == "data2"
-    assert fs.info("test_metadata_write/file.txt")["metadata"] == {"metadata": "data2"}
+    assert fs.getxattr("test-metadata-write/file.txt", "meta") == "datum"
+    fs.setxattrs("test-metadata-write/file.txt", metadata="data2")
+    assert fs.getxattr("test-metadata-write/file.txt", "metadata") == "data2"
+    assert fs.info("test-metadata-write/file.txt")["metadata"] == {"metadata": "data2"}
 
     # empty file and nested directory
     with fs.open(
-        "test_metadata_write/a/b/c/nested-file.txt", "wb", metadata=metadata
+        "test-metadata-write/a/b/c/nested-file.txt", "wb", metadata=metadata
     ) as f:
         f.write(b"")
-    assert fs.getxattr("test_metadata_write/a/b/c/nested-file.txt", "meta") == "data"
-    fs.setxattrs("test_metadata_write/a/b/c/nested-file.txt", metadata="data2")
-    assert fs.info("test_metadata_write/a/b/c/nested-file.txt")["metadata"] == {
+    assert fs.getxattr("test-metadata-write/a/b/c/nested-file.txt", "meta") == "data"
+    fs.setxattrs("test-metadata-write/a/b/c/nested-file.txt", metadata="data2")
+    assert fs.info("test-metadata-write/a/b/c/nested-file.txt")["metadata"] == {
         "metadata": "data2"
     }
-    fs.rmdir("test_metadata_write")
+    fs.rmdir("test-metadata-write")
 
 
 def test_put_file(storage):
@@ -1091,14 +1144,20 @@ def test_put_file(storage):
     lfs.rm("sample2.txt")
 
     # Check that put on a file with data works
-    with open("sample3.txt", "wb") as f:
+    with tempfile.NamedTemporaryFile("wb") as f:
         f.write(b"01234567890")
-    fs.put("sample3.txt", "putdir/sample3.txt")
-    fs.get("putdir/sample3.txt", "sample4.txt")
-    with open("sample3.txt", "rb") as f:
-        f3 = f.read()
-    with open("sample4.txt", "rb") as f:
-        f4 = f.read()
+
+        fs.put(f.name, "putdir/sample3.txt")
+        with open(f.name, "rb") as g:
+            f3 = g.read()
+
+    with tempfile.TemporaryDirectory() as td:
+        dst = os.path.join(td, "sample4.txt")
+        fs.get("putdir/sample3.txt", dst)
+
+        with open(dst, "rb") as f:
+            f4 = f.read()
+
     assert f3 == f4
     fs.rm("putdir", recursive=True)
 
@@ -1124,8 +1183,44 @@ def test_cat(storage):
     data = b"0123456789"
     with fs.open("catdir/catfile.txt", "wb") as f:
         f.write(data)
-    assert fs.cat("catdir/catfile.txt") == data
+    result = fs.cat("catdir/catfile.txt")
+    assert result == data
     fs.rm("catdir/catfile.txt")
+
+
+def test_cat_file(storage):
+    fs = AzureBlobFileSystem(
+        account_name=storage.account_name, connection_string=CONN_STR
+    )
+    fs.mkdir("catdir")
+    data = b"0123456789"
+    with fs.open("catdir/catfile.txt", "wb") as f:
+        f.write(data)
+
+    result = fs.cat_file("catdir/catfile.txt", start=1, end=2)
+    assert result == b"1"
+
+    result = fs.cat_file("catdir/catfile.txt", start=8)
+    assert result == b"89"
+
+    result = fs.cat_file("catdir/catfile.txt", end=2)
+    assert result == b"01"
+
+    result = fs.cat_file("abfs://catdir/catfile.txt")
+    assert result == data
+    fs.rm("catdir/catfile.txt")
+
+
+def test_cat_file_missing(storage):
+    fs = AzureBlobFileSystem(
+        account_name=storage.account_name, connection_string=CONN_STR
+    )
+    fs.mkdir("catdir")
+    with pytest.raises(FileNotFoundError):
+        fs.cat_file("catdir/not/exist")
+
+    with pytest.raises(FileNotFoundError):
+        fs.cat_file("does/not/exist")
 
 
 def test_url(storage):
@@ -1172,3 +1267,49 @@ def test_exists(storage):
     assert not fs.exists("non-existent-container/")
     assert fs.exists("")
     assert not fs.exists("data/not-a-key")
+
+
+def test_exists_directory(storage):
+    fs = AzureBlobFileSystem(
+        account_name=storage.account_name, connection_string=CONN_STR
+    )
+
+    fs.mkdir("temp-exists")
+    fs.touch("temp-exists/data/data.txt")
+    fs.touch("temp-exists/data/something/data.txt")
+    fs.invalidate_cache()
+
+    assert fs.exists("temp-exists/data/something/")
+    assert fs.exists("temp-exists/data/something")
+    assert fs.exists("temp-exists/data/")
+    assert fs.exists("temp-exists/data")
+    assert fs.exists("temp-exists/")
+    assert fs.exists("temp-exists")
+
+
+def test_find_with_prefix(storage):
+    fs = AzureBlobFileSystem(
+        account_name=storage.account_name, connection_string=CONN_STR
+    )
+    test_bucket_name = "data"
+
+    for cursor in range(25):
+        fs.touch(test_bucket_name + f"/prefixes/test_{cursor}")
+
+    fs.touch(test_bucket_name + "/prefixes2")
+    assert len(fs.find(test_bucket_name + "/prefixes")) == 25
+    assert len(fs.find(test_bucket_name, prefix="prefixes")) == 26
+
+    assert len(fs.find(test_bucket_name + "/prefixes/test_")) == 0
+    assert len(fs.find(test_bucket_name + "/prefixes", prefix="test_")) == 25
+    assert len(fs.find(test_bucket_name + "/prefixes/", prefix="test_")) == 25
+
+    test_1s = fs.find(test_bucket_name + "/prefixes/test_1")
+    assert len(test_1s) == 1
+    assert test_1s[0] == test_bucket_name + "/prefixes/test_1"
+
+    test_1s = fs.find(test_bucket_name + "/prefixes/", prefix="test_1")
+    assert len(test_1s) == 11
+    assert test_1s == [test_bucket_name + "/prefixes/test_1"] + [
+        test_bucket_name + f"/prefixes/test_{cursor}" for cursor in range(10, 20)
+    ]

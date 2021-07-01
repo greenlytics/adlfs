@@ -42,7 +42,8 @@ ddf = dd.read_parquet('az://{CONTAINER}/folder.parquet', storage_options=storage
 
 or optionally, if AZURE_STORAGE_ACCOUNT_NAME and an AZURE_STORAGE_<CREDENTIAL> is 
 set as an environmental variable, then storage_options will be read from the environmental
-variables
+variables. In case none of them is specified, it will fall back to the azure identity library [default authentication methods](https://docs.microsoft.com/en-us/python/api/azure-identity/azure.identity.defaultazurecredential)
+
 ```
 
 To read from a public storage blob you are required to specify the `'account_name'`.
@@ -71,7 +72,8 @@ Operations against the Gen2 Datalake are implemented by leveraging [Azure Blob S
         account_key
         sas_token
         connection_string
-        or Azure ServicePrincipal credentials (tenant_id, client_id, client_secret)
+        Azure ServicePrincipal credentials (which requires tenant_id, client_id, client_secret)
+        location_mode:  valid value are "primary" or "secondary" and apply to RA-GRS accounts
 
     The following enviornmental variables can also be set and picked up for authentication:
         "AZURE_STORAGE_CONNECTION_STRING"
